@@ -1,0 +1,19 @@
+{
+  "name": "bob-task-tools",
+  "version": "1.0.0",
+  "description": "CLI tools for Bob Task Skill - Vikunja task management",
+  "type": "module",
+  "scripts": {
+    "list": "bun run task-list.ts",
+    "create": "bun run task-create.ts",
+    "update": "bun run task-update.ts",
+    "suggest": "bun run task-suggest.ts",
+    "assign": "bun run task-assign.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.2"
+  }
+}
+

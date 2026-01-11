@@ -1,0 +1,18 @@
+{
+  "name": "taskman-scripts",
+  "version": "2.0.1",
+  "description": "TaskMan skill scripts for Vikunja task management",
+  "type": "module",
+  "scripts": {
+    "sync-cache": "bun run sync-cache.ts",
+    "sync-projects": "bun run sync-projects.ts",
+    "query": "bun run query.ts",
+    "cleanup": "bun run cleanup.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.2"
+  }
+}
+

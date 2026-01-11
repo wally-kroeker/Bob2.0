@@ -1,0 +1,5 @@
+# This directory holds TaskMan cache data
+# - taskman.db (SQLite cache)
+# - project-hierarchy.md (generated)
+# - sync.log (sync logs)
+

@@ -41,6 +41,55 @@ git merge upstream/main
 git push origin main
 ```
 
+### Customized Core Files (UPSTREAM DELTA)
+
+**WARNING:** The following installed files have been customized beyond placeholder replacement. When merging upstream changes to `pai-core-install`, these files may need manual reconciliation.
+
+#### Files Modified (in `~/.claude/skills/CORE/`)
+
+| File | Upstream State | Bob Customization | Risk |
+|------|---------------|-------------------|------|
+| `SKILL.md` | Generic placeholders | Bob identity + personality numbers | LOW - structural match |
+| `USER/DAIDENTITY.md` | Generic placeholders + default personality | Bob persona, Bobiverse traits, peer relationship | **MEDIUM** - added content |
+
+#### DAIDENTITY.md Customizations (2026-01-10)
+
+Added content **beyond** simple placeholder replacement:
+
+1. **Personality & Behavior section** - Replaced generic traits with Bobiverse-specific personality:
+   - "Conscientious & Careful", "Competent & Slightly Smug", "Dry Humor"
+   - These overlap with `~/.claude/CLAUDE.md` (primary personality file)
+
+2. **Relationship Model section** - Changed from options list to active "Partner/Peer" with example dialogue
+
+3. **Personality Calibration** - Custom values: Directness 85, Humor 80, Precision 90, Formality 30, Curiosity 85
+
+#### Redundancy Notes
+
+Some content in `DAIDENTITY.md` is **intentionally redundant** with `~/.claude/CLAUDE.md`:
+- CLAUDE.md = **authoritative** personality definition (detailed, with examples)
+- DAIDENTITY.md = **summary** for hooks to read (Name, Color, Voice ID) + personality snapshot
+
+If upstream introduces features that read personality from DAIDENTITY.md, we may need to:
+1. Consolidate personality to one location
+2. Or accept DAIDENTITY.md as the hook-readable summary
+
+#### Merge Strategy
+
+When merging upstream `pai-core-install` updates:
+
+```bash
+# 1. Check what changed in upstream CORE files
+git diff upstream/main -- Packs/pai-core-install/src/skills/CORE/
+
+# 2. If structural changes to SKILL.md or DAIDENTITY.md:
+#    - Review changes manually
+#    - Re-apply Bob customizations after merge
+#    - Update this documentation
+
+# 3. Safe to auto-merge: hooks/, tools/, other skills
+```
+
 ### BobPacks Directory
 
 Personal packs live in `BobPacks/` to keep them separate from upstream `Packs/`:
@@ -53,15 +102,16 @@ Personal packs live in `BobPacks/` to keep them separate from upstream `Packs/`:
 
 | Pack | Type | Description |
 |------|------|-------------|
-| `bob-telos-skill` | Skill | Business accountability using Telos framework |
+| `bob-bobiverse-agents-skill` | Skill | Bobiverse-named agents with persistent personas (Bill, Mario, Riker, Howard, Homer, Hugh, Bender, Ick) |
 | `bob-cognitive-loop-skill` | Skill | Daily writing + Substack publishing |
+| `bob-external-agents-skill` | Skill | Spawn external AI CLI agents (Codex, Gemini, Claude) as background processes |
 | `bob-financial-system-skill` | Skill | Personal/corporate finance with Firefly III |
-| `bob-taskman-skill` | Skill | Vikunja task orchestration |
-| `bob-vikunja-skill` | Skill | Vikunja MCP reference |
 | `bob-opnsense-dns-skill` | Skill | OPNsense DNS management |
 | `bob-pandoc-skill` | Skill | Markdown to PDF conversion |
 | `bob-scratchpad-skill` | Skill | Universal scratchpad for managing untargeted outputs with auto-save, search, and archival |
-| `bob-external-agents-skill` | Skill | Spawn external AI CLI agents (Codex, Gemini, Claude) as background processes |
+| `bob-taskman-skill` | Skill | Vikunja task orchestration |
+| `bob-telos-skill` | Skill | Business accountability using Telos framework |
+| `bob-vikunja-skill` | Skill | Vikunja MCP reference |
 
 ### Creating a New BobPack
 

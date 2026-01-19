@@ -145,6 +145,31 @@ sessions_count=$(find "$PAI_DIR/MEMORY" -name "*.jsonl" 2>/dev/null | wc -l | tr
 research_count=$(find "$PAI_DIR/MEMORY/RESEARCH" -type f \( -name "*.md" -o -name "*.json" \) 2>/dev/null | wc -l | tr -d ' ')
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SYSTEM RESOURCES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# CPU usage - use top for overall CPU percentage
+cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)
+# Fallback if top format different
+[ -z "$cpu_usage" ] && cpu_usage=$(top -bn1 | grep "%Cpu" | awk '{print $2}' | cut -d'%' -f1)
+# Round to integer
+cpu_usage=$(printf "%.0f" "$cpu_usage" 2>/dev/null || echo "0")
+
+# Memory usage - use free for memory stats
+mem_total=$(free -m | awk 'NR==2{print $2}')
+mem_used=$(free -m | awk 'NR==2{print $3}')
+mem_pct=$(awk "BEGIN {printf \"%.0f\", ($mem_used/$mem_total)*100}" 2>/dev/null || echo "0")
+
+# Format memory display (convert to GB if >1024 MB)
+if [ "$mem_total" -gt 1024 ]; then
+    mem_total_display=$(awk "BEGIN {printf \"%.1fG\", $mem_total/1024}")
+    mem_used_display=$(awk "BEGIN {printf \"%.1fG\", $mem_used/1024}")
+else
+    mem_total_display="${mem_total}M"
+    mem_used_display="${mem_used}M"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # COLOR PALETTE
 # ─────────────────────────────────────────────────────────────────────────────
 # Tailwind-inspired colors organized by usage
@@ -276,6 +301,27 @@ get_bucket_color() {
     printf '\033[38;2;%d;%d;%dm' "$r" "$g" "$b"
 }
 
+# Get color for system resource usage (CPU/memory)
+# Green (low) → Yellow (medium) → Red (high)
+get_resource_color() {
+    local pct=$1
+    local r g b
+
+    if [ "$pct" -le 50 ]; then
+        # Green (0-50%): RGB(74,222,128)
+        echo "${EMERALD}"
+    elif [ "$pct" -le 75 ]; then
+        # Yellow (50-75%): RGB(250,204,21)
+        echo "${AMBER}"
+    elif [ "$pct" -le 90 ]; then
+        # Orange (75-90%): RGB(251,146,60)
+        echo "${ORANGE}"
+    else
+        # Red (90-100%): RGB(239,68,68)
+        echo "${ROSE}"
+    fi
+}
+
 # Render context bar with specified bucket count
 render_context_bar() {
     local width=$1 pct=$2
@@ -315,7 +361,7 @@ current_time=$(date +"%H:%M")
 # Fetch location from IP (with caching)
 fetch_location() {
     local cache_age=999999
-    [ -f "$LOCATION_CACHE" ] && cache_age=$(($(date +%s) - $(stat -f %m "$LOCATION_CACHE" 2>/dev/null || echo 0)))
+    [ -f "$LOCATION_CACHE" ] && cache_age=$(($(date +%s) - $(stat -c %Y "$LOCATION_CACHE" 2>/dev/null || echo 0)))
 
     if [ "$cache_age" -gt "$LOCATION_CACHE_TTL" ]; then
         # Fetch fresh location data
@@ -336,7 +382,7 @@ fetch_location() {
 # Fetch weather (with caching) using Open-Meteo (free, no API key)
 fetch_weather() {
     local cache_age=999999
-    [ -f "$WEATHER_CACHE" ] && cache_age=$(($(date +%s) - $(stat -f %m "$WEATHER_CACHE" 2>/dev/null || echo 0)))
+    [ -f "$WEATHER_CACHE" ] && cache_age=$(($(date +%s) - $(stat -c %Y "$WEATHER_CACHE" 2>/dev/null || echo 0)))
 
     if [ "$cache_age" -gt "$WEATHER_CACHE_TTL" ]; then
         # Get lat/lon from location cache
@@ -387,24 +433,47 @@ weather_str=$(fetch_weather)
 # Output PAI branding line
 case "$MODE" in
     nano)
-        printf "${SLATE_600}── │${RESET} ${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${SLATE_600}│ ────────────${RESET}\n"
+        printf "${SLATE_600}── │${RESET} ${PAI_A}◈ GUPPI ◈${RESET} ${SLATE_600}│ ────────────${RESET}\n"
         printf "${PAI_TIME}${current_time}${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
-        printf "${SLATE_400}ENV:${RESET} ${SLATE_500}v${PAI_A}${PAI_VERSION}${RESET} ${SLATE_400}S:${SLATE_300}${skills_count}${RESET}\n"
+        printf "${SLATE_400}ENV:${RESET} ${PAI_A}${model_name}${RESET} ${SLATE_500}v${PAI_A}${PAI_VERSION}${RESET} ${SLATE_400}S:${SLATE_300}${skills_count}${RESET}\n"
         ;;
     micro)
-        printf "${SLATE_600}── │${RESET} ${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${PAI_A}STATUSLINE${RESET} ${SLATE_600}│ ──────────────────${RESET}\n"
+        printf "${SLATE_600}── │${RESET} ${PAI_A}◈ GUPPI INTERFACE ◈${RESET} ${SLATE_600}│ ──────────────────${RESET}\n"
         printf "${PAI_LABEL}LOC:${RESET} ${PAI_CITY}${location_city}${RESET} ${SLATE_600}│${RESET} ${PAI_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
-        printf "${SLATE_400}ENV:${RESET} ${SLATE_400}CC:${RESET} ${PAI_A}${cc_version}${RESET} ${SLATE_600}│${RESET} ${SLATE_500}PAI:${RESET} ${PAI_A}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${SLATE_400}S:${SLATE_300}${skills_count}${RESET} ${SLATE_400}W:${SLATE_300}${workflows_count}${RESET} ${SLATE_400}H:${SLATE_300}${hooks_count}${RESET}\n"
+        printf "${SLATE_400}ENV:${RESET} ${SLATE_400}Model:${RESET} ${PAI_A}${model_name}${RESET} ${SLATE_600}│${RESET} ${SLATE_400}CC:${RESET} ${PAI_A}${cc_version}${RESET} ${SLATE_600}│${RESET} ${SLATE_500}PAI:${RESET} ${PAI_A}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${SLATE_400}S:${SLATE_300}${skills_count}${RESET} ${SLATE_400}W:${SLATE_300}${workflows_count}${RESET} ${SLATE_400}H:${SLATE_300}${hooks_count}${RESET}\n"
         ;;
     mini)
-        printf "${SLATE_600}── │${RESET} ${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${PAI_A}STATUSLINE${RESET} ${SLATE_600}│ ────────────────────────────────────────${RESET}\n"
+        printf "${SLATE_600}── │${RESET} ${PAI_A}◈ GUPPI INTERFACE ◈${RESET} ${SLATE_600}│ ────────────────────────────────────────${RESET}\n"
         printf "${PAI_LABEL}LOC:${RESET} ${PAI_CITY}${location_city}${RESET}${SLATE_600},${RESET} ${PAI_STATE}${location_state}${RESET} ${SLATE_600}│${RESET} ${PAI_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
-        printf "${SLATE_400}ENV:${RESET} ${SLATE_400}CC:${RESET} ${PAI_A}${cc_version}${RESET} ${SLATE_600}│${RESET} ${SLATE_500}PAI:${RESET} ${PAI_A}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${WIELD_ACCENT}Skills:${RESET}${SLATE_300}${skills_count}${RESET} ${WIELD_WORKFLOWS}Workflows:${RESET}${SLATE_300}${workflows_count}${RESET} ${WIELD_HOOKS}Hooks:${RESET}${SLATE_300}${hooks_count}${RESET}\n"
+        printf "${SLATE_400}ENV:${RESET} ${SLATE_400}Model:${RESET} ${PAI_A}${model_name}${RESET} ${SLATE_600}│${RESET} ${SLATE_400}CC:${RESET} ${PAI_A}${cc_version}${RESET} ${SLATE_600}│${RESET} ${SLATE_500}PAI:${RESET} ${PAI_A}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${WIELD_ACCENT}Skills:${RESET}${SLATE_300}${skills_count}${RESET} ${WIELD_WORKFLOWS}Workflows:${RESET}${SLATE_300}${workflows_count}${RESET} ${WIELD_HOOKS}Hooks:${RESET}${SLATE_300}${hooks_count}${RESET}\n"
         ;;
     normal)
-        printf "${SLATE_600}── │${RESET} ${PAI_P}P${PAI_A}A${PAI_I}I${RESET} ${PAI_A}STATUSLINE${RESET} ${SLATE_600}│ ──────────────────────────────────────────────────${RESET}\n"
+        printf "${SLATE_600}── │${RESET} ${PAI_A}◈ GUPPI INTERFACE ◈${RESET} ${SLATE_600}│ ──────────────────────────────────────────────────${RESET}\n"
         printf "${PAI_LABEL}LOC:${RESET} ${PAI_CITY}${location_city}${RESET}${SLATE_600},${RESET} ${PAI_STATE}${location_state}${RESET} ${SLATE_600}│${RESET} ${PAI_TIME}${current_time}${RESET} ${SLATE_600}│${RESET} ${PAI_WEATHER}${weather_str}${RESET}\n"
-        printf "${SLATE_400}ENV:${RESET} ${SLATE_400}CC:${RESET} ${PAI_A}${cc_version}${RESET} ${SLATE_600}│${RESET} ${SLATE_500}PAI:${RESET} ${PAI_A}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${WIELD_ACCENT}Skills:${RESET} ${SLATE_300}${skills_count}${RESET} ${SLATE_600}│${RESET} ${WIELD_WORKFLOWS}Workflows:${RESET} ${SLATE_300}${workflows_count}${RESET} ${SLATE_600}│${RESET} ${WIELD_HOOKS}Hooks:${RESET} ${SLATE_300}${hooks_count}${RESET}\n"
+        printf "${SLATE_400}ENV:${RESET} ${SLATE_400}Model:${RESET} ${PAI_A}${model_name}${RESET} ${SLATE_600}│${RESET} ${SLATE_400}CC:${RESET} ${PAI_A}${cc_version}${RESET} ${SLATE_600}│${RESET} ${SLATE_500}PAI:${RESET} ${PAI_A}v${PAI_VERSION}${RESET} ${SLATE_600}│${RESET} ${WIELD_ACCENT}Skills:${RESET} ${SLATE_300}${skills_count}${RESET} ${SLATE_600}│${RESET} ${WIELD_WORKFLOWS}Workflows:${RESET} ${SLATE_300}${workflows_count}${RESET} ${SLATE_600}│${RESET} ${WIELD_HOOKS}Hooks:${RESET} ${SLATE_300}${hooks_count}${RESET}\n"
+        ;;
+esac
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SYSTEM RESOURCES (CPU/Memory)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Get colors based on usage
+cpu_color=$(get_resource_color "$cpu_usage")
+mem_color=$(get_resource_color "$mem_pct")
+
+case "$MODE" in
+    nano)
+        printf "${SLATE_400}SYS:${RESET} ${cpu_color}CPU:${cpu_usage}%%${RESET} ${mem_color}RAM:${mem_pct}%%${RESET}\n"
+        ;;
+    micro)
+        printf "${SLATE_400}SYSTEM:${RESET} ${SLATE_400}CPU:${RESET} ${cpu_color}${cpu_usage}%%${RESET} ${SLATE_600}│${RESET} ${SLATE_400}RAM:${RESET} ${mem_color}${mem_used_display}/${mem_total_display}${RESET} ${SLATE_600}(${mem_color}${mem_pct}%%${RESET}${SLATE_600})${RESET}\n"
+        ;;
+    mini)
+        printf "${SLATE_400}SYSTEM:${RESET} ${SLATE_400}CPU:${RESET} ${cpu_color}${cpu_usage}%%${RESET} ${SLATE_600}│${RESET} ${SLATE_400}RAM:${RESET} ${mem_color}${mem_used_display}/${mem_total_display}${RESET} ${SLATE_600}(${mem_color}${mem_pct}%%${RESET}${SLATE_600})${RESET}\n"
+        ;;
+    normal)
+        printf "${SLATE_400}SYSTEM:${RESET} ${SLATE_400}CPU:${RESET} ${cpu_color}${cpu_usage}%%${RESET} ${SLATE_600}│${RESET} ${SLATE_400}Memory:${RESET} ${mem_color}${mem_used_display}${RESET} ${SLATE_600}/${RESET} ${SLATE_300}${mem_total_display}${RESET} ${SLATE_600}(${mem_color}${mem_pct}%%${RESET}${SLATE_600})${RESET}\n"
         ;;
 esac
 printf "${SLATE_600}────────────────────────────────────────────────────────────────────────${RESET}\n"

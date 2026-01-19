@@ -37,7 +37,7 @@ Complete ALL checks below to confirm successful installation.
   cc --help 2>/dev/null || cc
   ```
   Expected: Interactive menu appears with provider selection (Anthropic/LiteLLM)
-  
+
   > Press `q` to quit the menu after verifying it appears
 
 - [ ] **Script has valid bash syntax**
@@ -45,6 +45,54 @@ Complete ALL checks below to confirm successful installation.
   bash -n ~/.local/bin/cc && echo "✓ Valid syntax" || echo "✗ Syntax error"
   ```
   Expected: `✓ Valid syntax`
+
+### ✅ Tmux Session Management
+
+- [ ] **Tmux is installed**
+  ```bash
+  which tmux && echo "✓ Tmux installed" || echo "✗ Tmux not found"
+  ```
+  Expected: `✓ Tmux installed`
+
+- [ ] **New session creates tmux session**
+  ```bash
+  cd /tmp && cc  # Select Anthropic → Sonnet
+  # After Claude starts, press Ctrl-B d to detach
+  tmux list-sessions | grep "^cc_" && echo "✓ Session created" || echo "✗ No session"
+  ```
+  Expected: `cc_tmp` (or similar) session visible
+
+- [ ] **Session restore menu works**
+  ```bash
+  cc  # Press 'r' for Restore Session
+  ```
+  Expected: Shows list of active `cc_*` sessions
+
+- [ ] **Dangerous mode toggle works**
+  ```bash
+  cc  # Press 'd' to toggle dangerous mode
+  ```
+  Expected: Menu shows `[ON]` indicator and warning banner
+
+- [ ] **Session attach works from outside tmux**
+  ```bash
+  # With a detached session existing:
+  cc  # Press 'r', select session number
+  ```
+  Expected: Attaches to existing session
+
+- [ ] **Session switch works from inside tmux**
+  ```bash
+  # While inside a tmux session:
+  cc  # Press 'r', select different session
+  ```
+  Expected: Switches to selected session (doesn't create nested tmux)
+
+- [ ] **Kill session works**
+  ```bash
+  cc  # Press 'r', then 'k', select session, confirm
+  ```
+  Expected: Session removed from `tmux list-sessions`
 
 ### ✅ Optional: LiteLLM Configuration
 
@@ -83,6 +131,10 @@ bash -n ~/.local/bin/cc && echo "✓ Script syntax valid" || echo "✗ Script ha
 | `cc` command accessible | ☐ |
 | Menu displays correctly | ☐ |
 | Syntax validation passes | ☐ |
+| Tmux installed | ☐ |
+| Tmux session creation works | ☐ |
+| Session restore menu works | ☐ |
+| Dangerous mode toggle works | ☐ |
 
 **Installation is COMPLETE when ALL required checks pass.**
 

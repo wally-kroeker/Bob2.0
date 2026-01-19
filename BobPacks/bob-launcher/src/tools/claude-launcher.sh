@@ -22,6 +22,249 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+# Global state
+DANGEROUS_MODE=0  # 0=off, 1=on (session-scoped)
+
+# ============================================================================
+# TMUX SESSION MANAGEMENT
+# ============================================================================
+
+# Check if currently running inside tmux
+is_inside_tmux() {
+    [[ -n "$TMUX" ]]
+}
+
+# Get sanitized session name from current directory
+get_session_name() {
+    local dir_name
+    dir_name=$(basename "$PWD")
+    # Sanitize: replace non-alphanumeric chars with underscore
+    echo "cc_${dir_name//[^a-zA-Z0-9_.-]/_}"
+}
+
+# Get unique session name (appends _2, _3, etc. if exists)
+get_unique_session_name() {
+    local base_name
+    base_name=$(get_session_name)
+    local name="$base_name"
+    local counter=2
+
+    while tmux has-session -t "$name" 2>/dev/null; do
+        name="${base_name}_${counter}"
+        ((counter++))
+    done
+
+    echo "$name"
+}
+
+# List all cc_* tmux sessions
+list_claude_sessions() {
+    tmux list-sessions -F "#{session_name}|#{session_created}|#{session_attached}|#{pane_current_path}" 2>/dev/null | \
+        grep "^cc_" || true
+}
+
+# Show session restore menu
+show_session_menu() {
+    clear
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}         ${BOLD}📂 Claude Code Sessions${NC}                           ${CYAN}║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    local sessions
+    sessions=$(list_claude_sessions)
+
+    if [[ -z "$sessions" ]]; then
+        echo -e "  ${YELLOW}No active Claude sessions found.${NC}"
+        echo ""
+        echo -e "    ${YELLOW}n)${NC} Start new session"
+        echo -e "    ${YELLOW}b)${NC} Back"
+        echo ""
+        read -p "  Select [n/b]: " choice
+        case $choice in
+            n|N) show_main_menu ;;
+            b|B|*) show_main_menu ;;
+        esac
+        return
+    fi
+
+    echo -e "  ${BOLD}Active Sessions:${NC}"
+    echo ""
+
+    local idx=1
+    local -A session_map
+
+    while IFS='|' read -r name created attached path; do
+        local status_icon
+        if [[ "$attached" == "1" ]]; then
+            status_icon="${GREEN}●${NC}"
+        else
+            status_icon="${YELLOW}○${NC}"
+        fi
+
+        # Format creation time
+        local created_str
+        created_str=$(date -d "@$created" "+%H:%M" 2>/dev/null || echo "unknown")
+
+        printf "    ${YELLOW}%2d)${NC} %b ${GREEN}%-20s${NC} ${DIM}started %s${NC}\n" "$idx" "$status_icon" "$name" "$created_str"
+        session_map[$idx]="$name"
+        ((idx++))
+    done <<< "$sessions"
+
+    echo ""
+    echo -e "    ${YELLOW}n)${NC}  New session"
+    echo -e "    ${YELLOW}k)${NC}  Kill session"
+    echo -e "    ${YELLOW}b)${NC}  Back"
+    echo ""
+
+    read -p "  Select session or option: " choice
+
+    case $choice in
+        n|N) show_main_menu ;;
+        k|K) show_kill_session_menu ;;
+        b|B) show_main_menu ;;
+        [0-9]*)
+            if [[ -n "${session_map[$choice]}" ]]; then
+                attach_to_session "${session_map[$choice]}"
+            else
+                echo -e "\n${RED}Invalid selection${NC}"
+                sleep 1
+                show_session_menu
+            fi
+            ;;
+        *) show_main_menu ;;
+    esac
+}
+
+# Attach to existing session
+attach_to_session() {
+    local session_name="$1"
+
+    if is_inside_tmux; then
+        # Switch to session within tmux
+        tmux switch-client -t "$session_name"
+    else
+        # Attach from outside tmux
+        tmux attach-session -t "$session_name"
+    fi
+}
+
+# Create tmux session and run Claude
+create_tmux_session() {
+    local session_name="$1"
+    local claude_cmd="$2"
+
+    echo -e "\n${GREEN}Creating tmux session: ${BOLD}$session_name${NC}"
+    echo -e "${DIM}Command: $claude_cmd${NC}\n"
+
+    if is_inside_tmux; then
+        # Create detached session, then switch to it
+        tmux new-session -d -s "$session_name" -c "$PWD" "$claude_cmd"
+        tmux switch-client -t "$session_name"
+    else
+        # Create and attach directly
+        exec tmux new-session -s "$session_name" -c "$PWD" "$claude_cmd"
+    fi
+}
+
+# Show kill session menu
+show_kill_session_menu() {
+    clear
+    echo ""
+    echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}         ${BOLD}🗑️  Kill Claude Session${NC}                           ${CYAN}║${NC}"
+    echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    local sessions
+    sessions=$(list_claude_sessions)
+
+    if [[ -z "$sessions" ]]; then
+        echo -e "  ${YELLOW}No sessions to kill.${NC}"
+        echo ""
+        read -p "  Press Enter to go back..."
+        show_session_menu
+        return
+    fi
+
+    echo -e "  ${BOLD}Select session to kill:${NC}"
+    echo ""
+
+    local idx=1
+    local -A session_map
+
+    while IFS='|' read -r name created attached path; do
+        local status_icon
+        if [[ "$attached" == "1" ]]; then
+            status_icon="${RED}● attached${NC}"
+        else
+            status_icon="${DIM}detached${NC}"
+        fi
+
+        printf "    ${YELLOW}%2d)${NC} ${GREEN}%-20s${NC} %b\n" "$idx" "$name" "$status_icon"
+        session_map[$idx]="$name"
+        ((idx++))
+    done <<< "$sessions"
+
+    echo ""
+    echo -e "    ${YELLOW}b)${NC}  Back"
+    echo ""
+
+    read -p "  Select session to kill: " choice
+
+    case $choice in
+        b|B) show_session_menu ;;
+        [0-9]*)
+            if [[ -n "${session_map[$choice]}" ]]; then
+                local target="${session_map[$choice]}"
+                echo ""
+                read -p "  Kill session '$target'? [y/N]: " confirm
+                if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                    tmux kill-session -t "$target" 2>/dev/null
+                    echo -e "  ${GREEN}✓ Session killed${NC}"
+                    sleep 1
+                fi
+                show_kill_session_menu
+            else
+                echo -e "\n${RED}Invalid selection${NC}"
+                sleep 1
+                show_kill_session_menu
+            fi
+            ;;
+        *) show_session_menu ;;
+    esac
+}
+
+# Toggle dangerous mode
+toggle_dangerous_mode() {
+    if [[ $DANGEROUS_MODE -eq 0 ]]; then
+        DANGEROUS_MODE=1
+    else
+        DANGEROUS_MODE=0
+    fi
+}
+
+# Get dangerous mode flag for claude command
+get_dangerous_flag() {
+    if [[ $DANGEROUS_MODE -eq 1 ]]; then
+        echo "--dangerously-skip-permissions"
+    fi
+}
+
+# Get dangerous mode indicator for menu
+get_dangerous_indicator() {
+    if [[ $DANGEROUS_MODE -eq 1 ]]; then
+        echo -e "${RED}[ON]${NC}"
+    else
+        echo -e "${DIM}[OFF]${NC}"
+    fi
+}
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+
 # Parse models from config.yaml (fallback to LiteLLM /v1/models if config is missing)
 get_litellm_models() {
     if [[ -f "$CONFIG_FILE" ]]; then
@@ -197,21 +440,36 @@ show_main_menu() {
     echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}         ${BOLD}🚀 Claude Code Launcher${NC}                          ${CYAN}║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+
+    # Show dangerous mode warning if enabled
+    if [[ $DANGEROUS_MODE -eq 1 ]]; then
+        echo ""
+        echo -e "  ${RED}⚠️  DANGEROUS MODE ENABLED - Permissions will be skipped${NC}"
+    fi
+
+    # Show project context
     echo ""
-    echo -e "  Select API Provider:"
+    echo -e "  ${DIM}Project: $(basename "$PWD")${NC}"
+    echo ""
+
+    echo -e "  ${BOLD}Select API Provider:${NC}"
     echo ""
     echo -e "    ${YELLOW}1)${NC} ${GREEN}Anthropic${NC} ${DIM}(Direct API - WebSearch enabled)${NC}"
     echo -e "    ${YELLOW}2)${NC} ${GREEN}LiteLLM Proxy${NC} ${DIM}(Gemini, GPT, etc. - uses Tavily)${NC}"
     echo ""
+    echo -e "    ${YELLOW}r)${NC} Restore Session"
+    echo -e "    ${YELLOW}d)${NC} Toggle Dangerous Mode $(get_dangerous_indicator)"
     echo -e "    ${YELLOW}s)${NC} Setup Tavily MCP"
     echo -e "    ${YELLOW}q)${NC} Quit"
     echo ""
-    
-    read -p "  Select [1/2/s/q]: " provider_choice
-    
+
+    read -p "  Select [1/2/r/d/s/q]: " provider_choice
+
     case $provider_choice in
         1) launch_anthropic ;;
         2) show_litellm_menu ;;
+        r|R) show_session_menu ;;
+        d|D) toggle_dangerous_mode; show_main_menu ;;
         s|S) setup_tavily_mcp; show_main_menu ;;
         q|Q) echo -e "\n${DIM}Goodbye!${NC}\n"; exit 0 ;;
         *) echo -e "\n${RED}Invalid option${NC}"; sleep 1; show_main_menu ;;
@@ -225,6 +483,13 @@ launch_anthropic() {
     echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}         ${BOLD}🔵 Anthropic Models${NC}                               ${CYAN}║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
+
+    # Show dangerous mode warning if enabled
+    if [[ $DANGEROUS_MODE -eq 1 ]]; then
+        echo ""
+        echo -e "  ${RED}⚠️  DANGEROUS MODE ENABLED${NC}"
+    fi
+
     echo ""
     echo -e "  Select Model:"
     echo ""
@@ -235,28 +500,38 @@ launch_anthropic() {
     echo -e "    ${YELLOW}b)${NC} Back"
     echo -e "    ${YELLOW}q)${NC} Quit"
     echo ""
-    
+
     read -p "  Select model: " model_choice
-    
+
     # Clear LiteLLM env vars to use Anthropic directly
     unset ANTHROPIC_BASE_URL
     unset ANTHROPIC_AUTH_TOKEN
-    
+
+    local session_name
+    local dangerous_flag
+    local claude_cmd
+
+    session_name=$(get_unique_session_name)
+    dangerous_flag=$(get_dangerous_flag)
+
     case $model_choice in
-        1) 
+        1)
             enable_anthropic_web_tools
-            echo -e "\n${GREEN}Launching Claude Code with Sonnet 4.5...${NC}\n"
-            exec claude "$@"
+            claude_cmd="claude $dangerous_flag $*"
+            echo -e "\n${GREEN}Launching Claude Code with Sonnet 4.5...${NC}"
+            create_tmux_session "$session_name" "$claude_cmd"
             ;;
         2)
             enable_anthropic_web_tools
-            echo -e "\n${GREEN}Launching Claude Code with Opus 4.5...${NC}\n"
-            exec claude --model claude-4-5-opus "$@"
+            claude_cmd="claude --model claude-4-5-opus $dangerous_flag $*"
+            echo -e "\n${GREEN}Launching Claude Code with Opus 4.5...${NC}"
+            create_tmux_session "$session_name" "$claude_cmd"
             ;;
         3)
             enable_anthropic_web_tools
-            echo -e "\n${GREEN}Launching Claude Code with Haiku 4.5...${NC}\n"
-            exec claude --model claude-4-5-haiku "$@"
+            claude_cmd="claude --model claude-4-5-haiku $dangerous_flag $*"
+            echo -e "\n${GREEN}Launching Claude Code with Haiku 4.5...${NC}"
+            create_tmux_session "$session_name" "$claude_cmd"
             ;;
         b|B) show_main_menu ;;
         q|Q) echo -e "\n${DIM}Goodbye!${NC}\n"; exit 0 ;;
@@ -368,20 +643,25 @@ show_litellm_menu() {
         [0-9]*)
             if [[ -n "${model_map[$model_choice]}" ]]; then
                 local selected_model="${model_map[$model_choice]}"
-                
-                # Set LiteLLM environment
-                export ANTHROPIC_BASE_URL="$LITELLM_URL"
-                export ANTHROPIC_AUTH_TOKEN="$LITELLM_KEY"
-                
+
                 # Disable Anthropic web tools when using LiteLLM
                 disable_anthropic_web_tools
-                
+
                 echo ""
                 echo -e "${GREEN}Launching Claude Code with ${BOLD}$selected_model${NC}${GREEN}...${NC}"
                 echo -e "${DIM}(via LiteLLM proxy at $LITELLM_URL)${NC}"
-                echo ""
-                
-                exec claude --model "$selected_model" "$@"
+
+                local session_name
+                local dangerous_flag
+                local claude_cmd
+
+                session_name=$(get_unique_session_name)
+                dangerous_flag=$(get_dangerous_flag)
+
+                # Bake LiteLLM env vars into the command string for tmux
+                claude_cmd="ANTHROPIC_BASE_URL='$LITELLM_URL' ANTHROPIC_AUTH_TOKEN='$LITELLM_KEY' claude --model '$selected_model' $dangerous_flag $*"
+
+                create_tmux_session "$session_name" "$claude_cmd"
             else
                 echo -e "\n${RED}Invalid selection${NC}"
                 sleep 1

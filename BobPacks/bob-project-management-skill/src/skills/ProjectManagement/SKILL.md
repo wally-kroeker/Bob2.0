@@ -91,8 +91,22 @@ The skill includes 6 templates:
 
 TodoWrite-compatible format with:
 - YAML frontmatter (project, last_updated)
-- Sections: In Progress, Pending, Completed
-- Task format: status, activeForm, notes
+- Sections: In Progress, Pending, Completed, Deferred
+- Task format: status, activeForm, priority, assignee, notes, dependencies
+
+**Task fields:**
+- **status** (required): pending/in_progress/completed/deferred
+- **activeForm** (required): Present continuous form for TodoWrite
+- **priority** (optional): high/medium/low
+- **assignee** (optional): Bob, Wally, or AI agent names (Bill, Mario, etc.)
+- **dependencies** (optional): Other tasks that must complete first
+- **notes** (optional): Context, blockers, decisions
+
+**Assignee field purpose:**
+The assignee field supports delegation to AI agents ("Bob and friends"). When tasks are assigned to named agents (Bill, Mario, Riker, Howard, etc.), this enables parallel execution and clear responsibility tracking.
+
+**Standard maintained across all project types:**
+This format is intentionally standardized. All projects use the same structure regardless of complexity, ensuring consistency and TodoWrite tool compatibility.
 
 **Location:** `Templates/*.md`
 
@@ -106,6 +120,39 @@ The skill automatically detects project type:
 | package.json + src/ | application or library |
 | novel/, world/, prose content | creative |
 | Personal directory names, journal/ | personal |
+
+## Technical Project Detection & Openspec Routing
+
+**When to invoke Openspec skill:**
+
+For highly technical projects that need detailed specifications and multi-phase breakdown, route to the **Openspec skill** instead of (or in addition to) creating tasks.md.
+
+**Detection criteria for technical projects:**
+
+| Indicator | Route to Openspec |
+|-----------|-------------------|
+| Complex software project with multiple features | ✅ Yes |
+| Multi-phase implementation required | ✅ Yes |
+| Technical architecture decisions needed | ✅ Yes |
+| API design or system integration | ✅ Yes |
+| User mentions "spec", "specification", "phases" | ✅ Yes |
+| Simple bug fixes or maintenance | ❌ No - use tasks.md |
+| Creative/personal projects | ❌ No - use tasks.md |
+| Single-phase projects | ❌ No - use tasks.md |
+
+**Workflow:**
+1. During audit/standardization, detect if project is highly technical
+2. Ask user: "This appears to be a technical project requiring detailed specs. Would you like me to invoke the Openspec skill to create a specification with phases?"
+3. If yes: Use Openspec skill for phase breakdown and architecture
+4. Then: Create tasks.md from Openspec phases (or defer to implementation phase)
+
+**Integration pattern:**
+- Openspec creates: Specification with phases, architecture decisions, technical details
+- ProjectManagement creates: tasks.md for tracking implementation
+- Openspec phases become high-level milestones in tasks.md
+- Detailed per-phase tasks added during implementation
+
+**Primary use case:** Coding projects, technical infrastructure builds, API development
 
 ## tasks.md Conversion
 
@@ -197,7 +244,12 @@ Phase 1 focuses on **documentation standardization only**. Does NOT include:
 
 - **CORE skill** - Uses project detection patterns
 - **TodoWrite** - tasks.md format matches TodoWrite tool
+- **Openspec skill** - Routes highly technical projects for detailed specification and phase breakdown
+- **BobiverseAgents skill** - Assignee field enables delegation to named AI agents (Bill, Mario, etc.)
 - **Git** - Respects .gitignore, doesn't commit changes automatically
+
+**Openspec integration:**
+When ProjectManagement detects a highly technical project (complex software, multi-phase, architecture decisions), it suggests invoking the Openspec skill for detailed specifications. Openspec handles phase breakdown and technical architecture; ProjectManagement handles task tracking.
 
 ## File Locations
 

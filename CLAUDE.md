@@ -106,6 +106,7 @@ Personal packs live in `BobPacks/` to keep them separate from upstream `Packs/`:
 | `bob-cognitive-loop-skill` | Skill | Daily writing + Substack publishing |
 | `bob-external-agents-skill` | Skill | Spawn external AI CLI agents (Codex, Gemini, Claude) as background processes |
 | `bob-financial-system-skill` | Skill | Personal/corporate finance with Firefly III |
+| `bob-notion-skill` | Skill | Notion API integration for Second Brain - query, process, and recall captured content from Telegram |
 | `bob-opnsense-dns-skill` | Skill | OPNsense DNS management |
 | `bob-pandoc-skill` | Skill | Markdown to PDF conversion |
 | `bob-scratchpad-skill` | Skill | Universal scratchpad for managing untargeted outputs with auto-save, search, and archival |

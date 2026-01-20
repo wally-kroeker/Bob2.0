@@ -1,0 +1,38 @@
+{
+  "last_updated": "2026-01-19T18:32:00Z",
+  "total_updates": 1,
+  "by_year": {
+    "2026": 1
+  },
+  "by_significance": {
+    "critical": 0,
+    "major": 0,
+    "moderate": 1,
+    "minor": 0,
+    "trivial": 0
+  },
+  "by_change_type": {
+    "skill_update": 0,
+    "structure_change": 0,
+    "doc_update": 0,
+    "hook_update": 1,
+    "workflow_update": 0,
+    "config_update": 1,
+    "tool_update": 0,
+    "multi_area": 0
+  },
+  "updates": [
+    {
+      "id": "2026-01-19_voice-system-disable",
+      "date": "2026-01-19",
+      "title": "Voice System Disable Configuration",
+      "significance": "moderate",
+      "change_type": ["hook_update", "config_update"],
+      "files_modified": [
+        "~/.claude/settings.json",
+        "~/.claude/hooks/handlers/voice.ts"
+      ],
+      "summary": "Added voice.enabled setting to disable voice notifications without connection errors"
+    }
+  ]
+}

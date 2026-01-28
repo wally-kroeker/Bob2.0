@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**PAI (Personal AI Infrastructure) v2.0** - Open-source scaffolding for building personalized AI systems using modular, AI-installable "packs". This repository contains the pack templates, core infrastructure, and the Kai Bundle (complete PAI implementation).
+**PAI (Personal AI Infrastructure) v2.4 "The Algorithm"** - Open-source scaffolding for building personalized AI systems. v2.4 introduces The Algorithm (7-phase problem-solving with ISC tracking) and uses Full Release Install for streamlined setup. This repository contains the pack templates, core infrastructure, and the Official Bundle (complete PAI implementation).
 
 ## Fork Documentation
 
@@ -74,20 +74,24 @@ If upstream introduces features that read personality from DAIDENTITY.md, we may
 1. Consolidate personality to one location
 2. Or accept DAIDENTITY.md as the hook-readable summary
 
-#### Merge Strategy
+#### Merge Strategy (v2.4+)
 
-When merging upstream `pai-core-install` updates:
+When upgrading to a new PAI version:
 
 ```bash
-# 1. Check what changed in upstream CORE files
-git diff upstream/main -- Packs/pai-core-install/src/skills/CORE/
+# 1. v2.4+ uses Full Release Install approach
+#    - Backup USER/ customizations first
+#    - Copy new release: cp -r Releases/vX.Y/.claude ~/
+#    - Run wizard: cd ~/.claude && bun run PAIInstallWizard.ts
+#    - Restore USER/ customizations from backup
 
-# 2. If structural changes to SKILL.md or DAIDENTITY.md:
-#    - Review changes manually
-#    - Re-apply Bob customizations after merge
-#    - Update this documentation
+# 2. For git repo changes (BobPacks, CLAUDE.md):
+git fetch upstream
+git diff upstream/main -- Packs/ Releases/  # Review what's new
+git merge upstream/main
 
-# 3. Safe to auto-merge: hooks/, tools/, other skills
+# 3. Re-apply Bob customizations after merge if needed
+#    - USER/DAIDENTITY.md may need manual reconciliation
 ```
 
 ### BobPacks Directory
@@ -167,7 +171,7 @@ Before marking a BobPack as ready:
 **Bundles** - Curated collections of packs that work together
 - Handle installation order and pack dependencies
 - Official Bundle = flagship complete PAI implementation
-- Interactive wizard: `Bundles/Official/install.ts`
+- v2.4 uses Full Release Install: `cp -r Releases/v2.4/.claude ~/` then `PAIInstallWizard.ts`
 
 **Skills** - AI-invoked capabilities with SKILL.md routing
 - **MANDATORY TitleCase naming** (CreateSkill, not create-skill)
@@ -182,24 +186,29 @@ Before marking a BobPack as ready:
 
 ### System Flow
 
-**Installation:**
-1. User runs `bun run Bundles/Official/install.ts` (bootstrapping)
-2. Wizard creates directory structure at `~/.claude` (or custom `$PAI_DIR`)
-3. Sets environment variables (DA, TIME_ZONE, PAI_DIR)
-4. User gives pack directories to AI for installation
-5. AI copies files from `src/` to target locations
-6. AI completes VERIFY.md checklist
+**Installation (v2.4 Full Release Install - Recommended):**
+1. User copies pre-built release: `cp -r Releases/v2.4/.claude ~/`
+2. User runs configuration wizard: `cd ~/.claude && bun run PAIInstallWizard.ts`
+3. Wizard configures identity, timezone, voice (optional), and environment
+4. User restores any USER/ customizations from backup
+5. System is ready to use
+
+**Installation (Individual Packs - Advanced):**
+1. User gives pack directory to AI for installation
+2. AI copies files from `src/` to target locations
+3. AI completes VERIFY.md checklist
+4. Repeat for each pack in dependency order
 
 **Runtime:**
 1. User runs `claude`
-2. SessionStart hook fires → `initialize-session.ts` runs
-3. `load-core-context.ts` injects CORE skill (identity + routing)
+2. SessionStart hook fires → `SessionStart.hook.ts` runs
+3. CORE skill is injected (identity + The Algorithm + routing)
 4. User asks AI to perform task
 5. CORE skill routes to appropriate skill via trigger matching
-6. Skill executes workflow → generates output
+6. Skill executes workflow using The Algorithm (7 phases + ISC tracking)
 7. PreToolUse hook validates security before command execution
 8. PostToolUse hook captures output
-9. Stop hook saves work to history/
+9. Stop hook saves work to MEMORY/
 
 ### Critical File Locations
 
@@ -207,18 +216,25 @@ Before marking a BobPack as ready:
 $PAI_DIR/                           # Default: ~/.claude
 ├── .env                            # SINGLE source of ALL API keys
 ├── hooks/                          # Event automation scripts
-│   ├── security-validator.ts       # 10-tier attack pattern detection
-│   ├── initialize-session.ts       # Session setup
-│   ├── load-core-context.ts        # CORE skill injection
-│   └── lib/observability.ts        # Shared utilities
-├── history/                        # Captured work
-│   ├── sessions/YYYY-MM/
-│   ├── learnings/YYYY-MM/
-│   └── raw-outputs/YYYY-MM/
+│   ├── SecurityValidator.hook.ts   # 10-tier attack pattern detection
+│   ├── SessionStart.hook.ts        # Session setup + CORE injection
+│   └── lib/                        # Shared utilities
+├── MEMORY/                         # v2.4 memory system (replaces history/)
+│   ├── CAPTURES/                   # Captured outputs and artifacts
+│   ├── LEARNING/                   # Session learnings (YYYY-MM/)
+│   ├── PAISYSTEMUPDATES/           # System upgrade tracking
+│   ├── RESEARCH/                   # Research outputs
+│   ├── SECURITY/                   # Security-related captures
+│   ├── STATE/                      # Persistent state
+│   ├── VOICE/                      # Voice-related data
+│   └── WORK/                       # Active work context
 ├── skills/                         # Capabilities
 │   ├── CORE/SKILL.md              # Auto-loaded identity (Tier 0)
 │   ├── Art/                       # Visual generation
-│   └── Agents/                    # Agent orchestration
+│   ├── Agents/                    # Agent orchestration
+│   └── Research/                  # Research skill
+├── Observability/                  # Real-time monitoring server
+├── VoiceServer/                    # Voice notification server
 └── settings.json                   # Hook registration + environment variables
 ```
 
@@ -233,8 +249,8 @@ This project uses **Bun** (not Node.js) to execute TypeScript directly - no buil
 bun run path/to/file.ts
 
 # Examples:
-bun run Bundles/Official/install.ts
-bun run $PAI_DIR/hooks/security-validator.ts
+bun run ~/.claude/PAIInstallWizard.ts          # v2.4 configuration wizard
+bun run $PAI_DIR/hooks/SecurityValidator.hook.ts
 bun run $PAI_DIR/skills/Art/Tools/Generate.ts --help
 ```
 
@@ -245,16 +261,14 @@ bun run $PAI_DIR/skills/Art/Tools/Generate.ts --help
 ```bash
 # Test a hook manually (pipe JSON to stdin)
 echo '{"session_id":"test","tool_name":"Bash","tool_input":{"command":"ls"}}' | \
-  bun run $PAI_DIR/hooks/security-validator.ts
+  bun run $PAI_DIR/hooks/SecurityValidator.hook.ts
 
 # Follow pack verification checklist
 cat Packs/pai-hook-system/VERIFY.md
 
-# Check system health
-bun run $PAI_DIR/tools/PaiCheck.ts check
-
-# Generate architecture documentation
-bun run $PAI_DIR/tools/PaiCheck.ts generate
+# Check system health (v2.4 workflow guide - give to your DA)
+# See Tools/CheckPAIState.md - a diagnostic workflow your DA follows
+# Usage: Give CheckPAIState.md to Claude and say "Check my PAI state"
 ```
 
 ### Pack Development Workflow
@@ -279,11 +293,12 @@ bun run Tools/validate-pack.ts Packs/my-new-pack/
 
 ### Pack Installation Order
 
-Critical dependency chain (install in this order):
+**v2.4 Full Release Install (Recommended):** All packs come pre-installed in `Releases/v2.4/.claude/`
 
+**Individual Pack Installation (Advanced):** Critical dependency chain:
 1. **pai-hook-system** (foundation - event pipeline)
 2. **pai-core-install** (identity + skill routing + MEMORY system)
-3. Optional packs: voice, art, agents, prompting, observability
+3. Optional packs: voice, art, agents, prompting, observability, browser, statusline
 
 ## Architectural Patterns
 
@@ -353,7 +368,7 @@ Skills system requires **strict TitleCase** for all files and directories:
 
 ### Security Validation Tiers
 
-10-tier attack pattern detection system in `security-validator.ts`:
+10-tier attack pattern detection system in `SecurityValidator.hook.ts`:
 
 ```typescript
 const ATTACK_PATTERNS = {
@@ -381,7 +396,7 @@ const ATTACK_PATTERNS = {
 
 6. **Hooks never crash Claude** - Always `exit 0`, log errors to stderr, fail silently.
 
-7. **CORE skill auto-loads** - No trigger required. Loads at SessionStart via `load-core-context.ts` hook.
+7. **CORE skill auto-loads** - No trigger required. Loads at SessionStart via `SessionStart.hook.ts`.
 
 8. **Pack installation order matters** - Hooks → Core (includes MEMORY) → Skills. Dependencies must be installed first.
 
@@ -389,7 +404,7 @@ const ATTACK_PATTERNS = {
 
 10. **One .env file** - All API keys go in `$PAI_DIR/.env`. Never scatter across multiple files.
 
-11. **MEMORY is built-in** - The history/memory system is now part of pai-core-install, not a separate pack.
+11. **MEMORY is built-in** - The MEMORY/ system (CAPTURES/, LEARNING/, PAISYSTEMUPDATES/, RESEARCH/, SECURITY/, STATE/, VOICE/, WORK/) is part of pai-core-install, not a separate pack.
 
 ## Repository Structure
 
@@ -401,8 +416,10 @@ Bob2.0/
 │   └── ...
 ├── Bundles/
 │   └── Official/
-│       ├── install.ts          # Interactive installation wizard
 │       └── README.md           # Bundle documentation
+├── Releases/
+│   └── v2.4/
+│       └── .claude/            # Pre-built v2.4 release (Full Release Install)
 ├── Packs/
 │   ├── pai-hook-system/        # Foundation (install first)
 │   ├── pai-core-install/       # Skills + identity + MEMORY
@@ -414,7 +431,7 @@ Bob2.0/
 ├── Tools/
 │   ├── PAIPackTemplate.md      # Pack creation guide
 │   ├── PAIBundleTemplate.md    # Bundle creation guide
-│   ├── CheckPAIState.md        # System diagnostic
+│   ├── CheckPAIState.md        # System diagnostic workflow (give to DA)
 │   └── validate-pack.ts        # Pack validator
 ├── Deprecated/                 # Legacy v1.x code (ignore)
 ├── README.md                   # Main project documentation
@@ -425,20 +442,24 @@ Bob2.0/
 
 ## Common Tasks
 
-### Installing the Complete System
+### Installing the Complete System (v2.4 Full Release Install)
 
 ```bash
 # Clone repo
 git clone https://github.com/danielmiessler/PAI.git
-cd PAI/Bundles/Official
+cd PAI
 
-# Run interactive wizard
-bun run install.ts
+# Copy pre-built v2.4 release (includes all packs)
+cp -r Releases/v2.4/.claude ~/
+
+# Run configuration wizard
+cd ~/.claude
+bun run PAIInstallWizard.ts
 ```
 
-### Installing Individual Packs
+### Installing Individual Packs (Advanced)
 
-Give the pack directory to Claude Code:
+For custom installations or adding packs to existing system, give the pack directory to Claude Code:
 
 ```
 Install the pack from /absolute/path/to/Packs/pai-hook-system/
@@ -457,17 +478,21 @@ Use PAI_DIR="~/.claude" and DA="Bob".
 7. Test with AI: "Install this pack from Packs/my-pack/"
 8. Validate: `bun run Tools/validate-pack.ts Packs/my-pack/`
 
+Note: For v2.4+, consider whether your pack should be included in a future Full Release or remain a standalone pack.
+
 ### Checking System Health
 
-```bash
-# Check what's installed
-bun run $PAI_DIR/tools/PaiCheck.ts check
+v2.4 uses a workflow guide instead of a CLI tool. Give `Tools/CheckPAIState.md` to your DA:
 
-# Generate architecture documentation
-bun run $PAI_DIR/tools/PaiCheck.ts generate
+```
+Give this file to Claude and say: "Check my PAI state and give me recommendations."
 
-# View generated doc
-cat $PAI_DIR/PaiArchitecture.md
+The workflow guide will have your DA:
+1. Inventory installed packs
+2. Verify basic functionality
+3. Detect issues
+4. Compare to latest bundle
+5. Recommend improvements
 ```
 
 ## Key Principles (from README)
